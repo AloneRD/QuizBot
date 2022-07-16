@@ -20,9 +20,9 @@ def main():
     custom_keyboard = [['Новый вопрос', 'Сдаться'],
                        ['Мой счет']]
     menu_keyboard = telegram.ReplyKeyboardMarkup(custom_keyboard)
-
+    questions = get_quiz_question()
     dispacher.add_handler(CommandHandler("start", partial(start_callback, keyboard=menu_keyboard)))
-    dispacher.add_handler(MessageHandler(Filters.text, responds_to_user))
+    dispacher.add_handler(MessageHandler(Filters.text, partial(responds_to_user, question=questions)))
 
     updater.start_polling()
 
@@ -31,13 +31,15 @@ def start_callback(update, context, keyboard) -> NoReturn:
     update.message.reply_text("Здравствуйте", reply_markup=keyboard)
 
 
-def responds_to_user(update, context) -> NoReturn:
+def responds_to_user(update, context, question) -> NoReturn:
     message_text = update.message.text
+    if message_text == "Новый вопрос":
+        question_answer = next(question)
+        new_question = question_answer[0]
+    update.message.reply_text(new_question)
 
-    update.message.reply_text(message_text)
 
-
-def get_quiz_questions():
+def get_quiz_question():
     with open('quiz-questions/1vs1200.txt', 'r', encoding="KOI8-R") as file:
         file = file.read().split("\n\n")
         questions_answers = {}
@@ -50,6 +52,8 @@ def get_quiz_questions():
                 questions_answers[question[1]] = answer[1]
             except:
                 pass
+        for question, answer in questions_answers.items():
+            yield (question, answer)
 
 
 if __name__ == '__main__':
