@@ -1,6 +1,9 @@
 import os
+from functools import partial
 from typing import NoReturn
 from dotenv import load_dotenv
+
+import telegram
 from telegram.ext import Updater
 from telegram.ext import CommandHandler
 from telegram.ext import MessageHandler
@@ -14,14 +17,18 @@ def main():
     updater = Updater(token=tg_token)
     dispacher = updater.dispatcher
 
-    dispacher.add_handler(CommandHandler("start", start_callback))
+    custom_keyboard = [['Новый вопрос', 'Сдаться'],
+                       ['Мой счет']]
+    menu_keyboard = telegram.ReplyKeyboardMarkup(custom_keyboard)
+
+    dispacher.add_handler(CommandHandler("start", partial(start_callback, keyboard=menu_keyboard)))
     dispacher.add_handler(MessageHandler(Filters.text, responds_to_user))
 
     updater.start_polling()
 
 
-def start_callback(update, context) -> NoReturn:
-    update.message.reply_text("Здравствуйте")
+def start_callback(update, context, keyboard) -> NoReturn:
+    update.message.reply_text("Здравствуйте", reply_markup=keyboard)
 
 
 def responds_to_user(update, context) -> NoReturn:
