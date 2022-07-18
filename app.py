@@ -1,3 +1,4 @@
+from logging import Filter
 import os
 from functools import partial
 from typing import NoReturn
@@ -7,7 +8,7 @@ import telegram
 import redis
 from telegram.ext import Updater
 from telegram.ext import CommandHandler
-from telegram.ext import MessageHandler
+from telegram.ext import MessageHandler 
 from telegram.ext import Filters
 from telegram.ext import ConversationHandler
 
@@ -26,11 +27,11 @@ def main():
         entry_points=[CommandHandler("start", start)],
         states={
             'NEW_QUESTION': [MessageHandler(
-                Filters.text,
-                partial(handle_new_question_request, question=questions, db_redis=db_redis))],
+                Filters.regex('Новый вопрос|start'),
+                partial(handle_new_question_request, question=questions, db_redis=db_redis)),],
             'ANSWER': [MessageHandler(
                 Filters.text,
-                handle_solution_attempt)]
+                handle_solution_attempt)],    
         },
         fallbacks=[CommandHandler("cancel", cancel)]
     )
@@ -51,12 +52,11 @@ def start(update, _) -> NoReturn:
 def handle_new_question_request(update, context, question, db_redis) -> NoReturn:
     message_text = update.message.text
     chat_id = update.message.chat.id
-    if message_text == "Новый вопрос":
-        question_answer = next(question)
-        new_question = question_answer[0]
-        context.user_data['answer'] = question_answer[1]
-        db_redis.set(chat_id, new_question)
-        update.message.reply_text(db_redis.get(chat_id).decode())
+    question_answer = next(question)
+    new_question = question_answer[0]
+    context.user_data['answer'] = question_answer[1]
+    db_redis.set(chat_id, new_question)
+    update.message.reply_text(db_redis.get(chat_id).decode())
     return 'ANSWER'
 
 
@@ -65,6 +65,9 @@ def handle_solution_attempt(update, context):
     correct_answer = context.user_data['answer']
     if message_text.lower() in correct_answer.lower():
         update.message.reply_text("Правильно! Поздравляю! Для следующего вопроса нажми «Новый вопрос")
+        return 'NEW_QUESTION'
+    elif message_text == "Сдаться":
+        update.message.reply_text(context.user_data['answer'])
         return 'NEW_QUESTION'
     else:
         update.message.reply_text("Неправильно… Попробуешь ещё раз?")
