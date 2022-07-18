@@ -9,6 +9,7 @@ from telegram.ext import Updater
 from telegram.ext import CommandHandler
 from telegram.ext import MessageHandler
 from telegram.ext import Filters
+from telegram.ext import ConversationHandler
 
 
 def main():
@@ -16,32 +17,62 @@ def main():
     tg_token = os.getenv("TG_TOKEN")
     password_redis_db = os.getenv("REDIS_DB")
     db_redis = redis.Redis(host='redis-12655.c299.asia-northeast1-1.gce.cloud.redislabs.com', port=12655, db=0, password=password_redis_db)
+    questions = get_quiz_question()
 
     updater = Updater(token=tg_token)
     dispacher = updater.dispatcher
 
+    conv_handler = ConversationHandler(
+        entry_points=[CommandHandler("start", start)],
+        states={
+            'NEW_QUESTION': [MessageHandler(
+                Filters.text,
+                partial(handle_new_question_request, question=questions, db_redis=db_redis))],
+            'ANSWER': [MessageHandler(
+                Filters.text,
+                handle_solution_attempt)]
+        },
+        fallbacks=[CommandHandler("cancel", cancel)]
+    )
+    dispacher.add_handler(conv_handler)
+    updater.start_polling()
+    updater.idle()
+
+
+def start(update, _) -> NoReturn:
     custom_keyboard = [['Новый вопрос', 'Сдаться'],
                        ['Мой счет']]
     menu_keyboard = telegram.ReplyKeyboardMarkup(custom_keyboard)
-    questions = get_quiz_question()
-    dispacher.add_handler(CommandHandler("start", partial(start_callback, keyboard=menu_keyboard)))
-    dispacher.add_handler(MessageHandler(Filters.text, partial(responds_to_user, question=questions, db_redis=db_redis)))
 
-    updater.start_polling()
+    update.message.reply_text("Здравствуйте", reply_markup=menu_keyboard)
+    return 'NEW_QUESTION'
 
 
-def start_callback(update, context, keyboard) -> NoReturn:
-    update.message.reply_text("Здравствуйте", reply_markup=keyboard)
-
-
-def responds_to_user(update, context, question, db_redis) -> NoReturn:
+def handle_new_question_request(update, context, question, db_redis) -> NoReturn:
     message_text = update.message.text
     chat_id = update.message.chat.id
     if message_text == "Новый вопрос":
         question_answer = next(question)
         new_question = question_answer[0]
+        context.user_data['answer'] = question_answer[1]
         db_redis.set(chat_id, new_question)
-    update.message.reply_text(db_redis.get(chat_id).decode())
+        update.message.reply_text(db_redis.get(chat_id).decode())
+    return 'ANSWER'
+
+
+def handle_solution_attempt(update, context):
+    message_text = update.message.text
+    correct_answer = context.user_data['answer']
+    if message_text.lower() in correct_answer.lower():
+        update.message.reply_text("Правильно! Поздравляю! Для следующего вопроса нажми «Новый вопрос")
+        return 'NEW_QUESTION'
+    else:
+        update.message.reply_text("Неправильно… Попробуешь ещё раз?")
+
+
+def cancel(update, _):
+    update.message.reply_text('Будет скучно - пиши.', reply_markup=telegram.ReplyKeyboardRemove())
+    return ConversationHandler.END
 
 
 def get_quiz_question():
