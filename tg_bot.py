@@ -1,4 +1,4 @@
-from logging import Filter
+from quiz import get_quiz_question
 import os
 from functools import partial
 from typing import NoReturn
@@ -28,10 +28,10 @@ def main():
         states={
             'NEW_QUESTION': [MessageHandler(
                 Filters.regex('Новый вопрос|start'),
-                partial(handle_new_question_request, question=questions, db_redis=db_redis)),],
+                partial(handle_new_question_request, question=questions, db_redis=db_redis))],
             'ANSWER': [MessageHandler(
                 Filters.text,
-                handle_solution_attempt)],    
+                handle_solution_attempt)],
         },
         fallbacks=[CommandHandler("cancel", cancel)]
     )
@@ -75,23 +75,6 @@ def handle_solution_attempt(update, context):
 def cancel(update, _):
     update.message.reply_text('Будет скучно - пиши.', reply_markup=telegram.ReplyKeyboardRemove())
     return ConversationHandler.END
-
-
-def get_quiz_question():
-    with open('quiz-questions/1vs1200.txt', 'r', encoding="KOI8-R") as file:
-        file = file.read().split("\n\n")
-        questions_answers = {}
-        for item in file:
-            if "Вопрос" in item:
-                question = item.split(":")
-            if "Ответ" in item:
-                answer = item.split(":")
-            try:
-                questions_answers[question[1]] = answer[1]
-            except:
-                pass
-        for question, answer in questions_answers.items():
-            yield (question, answer)
 
 
 if __name__ == '__main__':
