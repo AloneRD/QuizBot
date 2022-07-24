@@ -14,7 +14,7 @@ def get_quiz_question():
                     answer = item.split(":")
                 try:
                     questions_answers[question[1]] = answer[1]
-                except:
+                except UnboundLocalError:
                     pass
             for question, answer in questions_answers.items():
                 yield (question, answer)
