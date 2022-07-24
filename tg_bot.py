@@ -13,33 +13,6 @@ from telegram.ext import Filters
 from telegram.ext import ConversationHandler
 
 
-def main():
-    load_dotenv()
-    tg_token = os.getenv("TG_TOKEN")
-    password_redis_db = os.getenv("REDIS_DB")
-    db_redis = redis.Redis(host='redis-12655.c299.asia-northeast1-1.gce.cloud.redislabs.com', port=12655, db=0, password=password_redis_db)
-    questions = get_quiz_question()
-
-    updater = Updater(token=tg_token)
-    dispacher = updater.dispatcher
-
-    conv_handler = ConversationHandler(
-        entry_points=[CommandHandler("start", start)],
-        states={
-            'NEW_QUESTION': [MessageHandler(
-                Filters.regex('Новый вопрос|start'),
-                partial(handle_new_question_request, question=questions, db_redis=db_redis))],
-            'ANSWER': [MessageHandler(
-                Filters.text,
-                handle_solution_attempt)],
-        },
-        fallbacks=[CommandHandler("cancel", cancel)]
-    )
-    dispacher.add_handler(conv_handler)
-    updater.start_polling()
-    updater.idle()
-
-
 def start(update, _) -> NoReturn:
     custom_keyboard = [['Новый вопрос', 'Сдаться'],
                        ['Мой счет']]
@@ -75,6 +48,33 @@ def handle_solution_attempt(update, context):
 def cancel(update, _):
     update.message.reply_text('Будет скучно - пиши.', reply_markup=telegram.ReplyKeyboardRemove())
     return ConversationHandler.END
+
+
+def main():
+    load_dotenv()
+    tg_token = os.getenv("TG_TOKEN")
+    password_redis_db = os.getenv("REDIS_DB")
+    db_redis = redis.Redis(host='redis-12655.c299.asia-northeast1-1.gce.cloud.redislabs.com', port=12655, db=0, password=password_redis_db)
+    questions = get_quiz_question()
+
+    updater = Updater(token=tg_token)
+    dispacher = updater.dispatcher
+
+    conv_handler = ConversationHandler(
+        entry_points=[CommandHandler("start", start)],
+        states={
+            'NEW_QUESTION': [MessageHandler(
+                Filters.regex('Новый вопрос|start'),
+                partial(handle_new_question_request, question=questions, db_redis=db_redis))],
+            'ANSWER': [MessageHandler(
+                Filters.text,
+                handle_solution_attempt)],
+        },
+        fallbacks=[CommandHandler("cancel", cancel)]
+    )
+    dispacher.add_handler(conv_handler)
+    updater.start_polling()
+    updater.idle()
 
 
 if __name__ == '__main__':
