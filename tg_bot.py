@@ -1,4 +1,3 @@
-from quiz import get_quiz_question
 import os
 from functools import partial
 from typing import NoReturn
@@ -6,6 +5,8 @@ from dotenv import load_dotenv
 
 import telegram
 import redis
+import json
+import re
 from telegram.ext import Updater
 from telegram.ext import CommandHandler
 from telegram.ext import MessageHandler
@@ -22,13 +23,26 @@ def start(update, _) -> NoReturn:
     return 'NEW_QUESTION'
 
 
-def handle_new_question_request(update, context, question, db_redis) -> NoReturn:
+def handle_new_question_request(update, context, db_redis) -> NoReturn:
     chat_id = update.message.chat.id
-    question_answer = next(question)
-    new_question = question_answer[0]
-    context.user_data['answer'] = question_answer[1]
-    db_redis.set(chat_id, new_question)
-    update.message.reply_text(db_redis.get(chat_id).decode())
+    user_in_redis = db_redis.get(f'user_tg_{chat_id}')
+    if user_in_redis:
+        last_asked_question = json.loads(user_in_redis)['last_asked_question']
+        last_question_number = int(re.match(r'question_(\d)', last_asked_question).group(1))
+        next_question = f"question_{last_question_number+1}"
+        question_answer = json.loads(db_redis.get(next_question))
+        if not question_answer:
+            question_answer = json.loads(db_redis.get("question_1"))
+            db_redis.set(f'user_tg_{chat_id}', json.dumps({"last_asked_question": "question_1"}))
+        else:
+            db_redis.set(f'user_tg_{chat_id}', json.dumps({"last_asked_question": next_question}))       
+    else:
+        db_redis.set(f'user_tg_{chat_id}', json.dumps({"last_asked_question": "question_1"}))
+        question_answer = json.loads(db_redis.get("question_1"))
+    question = question_answer['question']
+    answer = question_answer['answer']
+    context.user_data['answer'] = answer
+    update.message.reply_text(question)
     return 'ANSWER'
 
 
@@ -55,7 +69,6 @@ def main():
     tg_token = os.getenv("TG_TOKEN")
     password_redis_db = os.getenv("REDIS_DB")
     db_redis = redis.Redis(host='redis-12655.c299.asia-northeast1-1.gce.cloud.redislabs.com', port=12655, db=0, password=password_redis_db)
-    questions = get_quiz_question()
 
     updater = Updater(token=tg_token)
     dispacher = updater.dispatcher
@@ -65,7 +78,7 @@ def main():
         states={
             'NEW_QUESTION': [MessageHandler(
                 Filters.regex('Новый вопрос|start'),
-                partial(handle_new_question_request, question=questions, db_redis=db_redis))],
+                partial(handle_new_question_request, db_redis=db_redis))],
             'ANSWER': [MessageHandler(
                 Filters.text,
                 handle_solution_attempt)],
