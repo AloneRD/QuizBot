@@ -4,8 +4,9 @@ from vk_api.keyboard import VkKeyboard, VkKeyboardColor
 import vk_api as vk
 from vk_api.utils import get_random_id
 import os
-import random
-from quiz import get_quiz_question
+import redis
+import json
+import re
 
 
 def get_keyboard(event, vk_api):
@@ -29,20 +30,35 @@ def start(event, vk_api, keyboard):
     )
 
 
-def new_question(event, vk_api, keyboard, questions):
-    question_answer = next(questions)
-    new_question = question_answer[0]
-    answer = question_answer[1]
+def new_question(event, vk_api, keyboard, user_in_redis, user_id):
+    if user_in_redis:
+        last_asked_question = json.loads(user_in_redis)['last_asked_question']
+        last_question_number = int(re.match(r'question_(\d)', last_asked_question).group(1))
+        next_question = f"question_{last_question_number+1}"
+        question_answer = json.loads(db_redis.get(next_question))
+        if not question_answer:
+            question_answer = json.loads(db_redis.get("question_1"))
+            db_redis.set(f'user_vk_{user_id}', json.dumps({"last_asked_question": "question_1"}))
+        else:
+            db_redis.set(f'user_vk_{user_id}', json.dumps({"last_asked_question": next_question}))       
+    else:
+        db_redis.set(f'user_vk_{user_id}', json.dumps({"last_asked_question": "question_1"}))
+        question_answer = json.loads(db_redis.get("question_1"))
+    question = question_answer['question']
+
     vk_api.messages.send(
         peer_id=event.user_id,
         random_id=get_random_id(),
         keyboard=keyboard.get_keyboard(),
-        message=new_question
+        message=question
     )
-    return answer
 
 
-def handle_solution_attempt(event, vk_api, keyboard, answer):
+def handle_solution_attempt(event, vk_api, keyboard, user_in_redis, user_id):
+    last_asked_question = json.loads(user_in_redis)['last_asked_question']
+    question_answer = json.loads(db_redis.get(last_asked_question))
+    answer = question_answer['answer']
+
     if event.text in answer:
         message = "Правильно! Поздравляю! Для следующего вопроса нажми «Новый вопрос"
     else:
@@ -55,7 +71,11 @@ def handle_solution_attempt(event, vk_api, keyboard, answer):
     )
 
 
-def surrender(event, vk_api, keyboard, answer):
+def surrender(event, vk_api, keyboard, user_in_redis, user_id):
+    last_asked_question = json.loads(user_in_redis)['last_asked_question']
+    question_answer = json.loads(db_redis.get(last_asked_question))
+    answer = question_answer['answer']
+
     vk_api.messages.send(
         peer_id=event.user_id,
         random_id=get_random_id(),
@@ -69,19 +89,23 @@ if __name__ == "__main__":
     vk_token = os.getenv("VK_TOKEN")
     vk_session = vk.VkApi(token=vk_token)
     vk_api = vk_session.get_api()
+    password_redis_db = os.getenv("REDIS_DB")
+    db_redis = redis.Redis(host='redis-12655.c299.asia-northeast1-1.gce.cloud.redislabs.com', port=12655, db=0, password=password_redis_db)
 
     longpoll = VkLongPoll(vk_session)
 
-    questions = get_quiz_question()
-
     for event in longpoll.listen():
+
         if event.type == VkEventType.MESSAGE_NEW and event.to_me:
             keyboard = get_keyboard(event, vk_api)
+
             if event.text == "Начать":
                 start(event, vk_api, keyboard)
+                user_id = event.user_id
+                user_in_redis = db_redis.get(f'user_vk_{user_id}')
             elif event.text == "Новый вопрос":
-                answer = new_question(event, vk_api, keyboard, questions)
+                new_question(event, vk_api, keyboard, user_in_redis, user_id)
             elif event.text == "Сдаться":
-                surrender(event, vk_api, keyboard, answer)
+                surrender(event, vk_api, keyboard, user_in_redis, user_id)
             else:
-                handle_solution_attempt(event, vk_api, keyboard, answer)
+                handle_solution_attempt(event, vk_api, keyboard, user_in_redis, user_id)
