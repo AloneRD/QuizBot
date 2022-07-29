@@ -102,10 +102,12 @@ if __name__ == "__main__":
             if event.text == "Начать":
                 start(event, vk_api, keyboard)
                 user_id = event.user_id
-                user_in_redis = db_redis.get(f'user_vk_{user_id}')
             elif event.text == "Новый вопрос":
+                user_in_redis = db_redis.get(f'user_vk_{user_id}')
                 new_question(event, vk_api, keyboard, user_in_redis, user_id)
             elif event.text == "Сдаться":
+                user_in_redis = db_redis.get(f'user_vk_{user_id}')
                 surrender(event, vk_api, keyboard, user_in_redis, user_id)
             else:
+                user_in_redis = db_redis.get(f'user_vk_{user_id}')
                 handle_solution_attempt(event, vk_api, keyboard, user_in_redis, user_id)
