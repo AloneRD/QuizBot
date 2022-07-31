@@ -87,10 +87,11 @@ def surrender(event, vk_api, keyboard, user_in_redis, user_id):
 if __name__ == "__main__":
     load_dotenv()
     vk_token = os.getenv("VK_TOKEN")
+    redis_host = os.getenv("REDIS_HOST")
     vk_session = vk.VkApi(token=vk_token)
     vk_api = vk_session.get_api()
     password_redis_db = os.getenv("REDIS_DB")
-    db_redis = redis.Redis(host='redis-12655.c299.asia-northeast1-1.gce.cloud.redislabs.com', port=12655, db=0, password=password_redis_db)
+    db_redis = redis.Redis(host=redis_host, port=12655, db=0, password=password_redis_db)
 
     longpoll = VkLongPoll(vk_session)
 

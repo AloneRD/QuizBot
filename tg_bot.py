@@ -68,7 +68,8 @@ def main():
     load_dotenv()
     tg_token = os.getenv("TG_TOKEN")
     password_redis_db = os.getenv("REDIS_DB")
-    db_redis = redis.Redis(host='redis-12655.c299.asia-northeast1-1.gce.cloud.redislabs.com', port=12655, db=0, password=password_redis_db)
+    redis_host = os.getenv("REDIS_HOST")
+    db_redis = redis.Redis(host=redis_host, port=12655, db=0, password=password_redis_db)
 
     updater = Updater(token=tg_token)
     dispacher = updater.dispatcher
